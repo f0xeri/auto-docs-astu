@@ -5,6 +5,22 @@ from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.shared import Pt, Cm
 
+
+# хранение классов из исходника
+class class_:
+    class_name = ''
+    fields = []
+    methods = []
+
+    def __init__(self, class_name, fields, methods):
+        self.class_name = class_name
+        self.fields = fields
+        self.methods = methods
+
+    def get_all(self):
+        return {'class_name': self.class_name, 'fields': self.fields, 'methods': self.methods}
+
+
 lab_names = [
     "Знакомство с интегрированной средой Code::Blocks",
     "Организация циклов в С++",
@@ -60,6 +76,7 @@ purposes = [
 ]
 
 
+# создание шабки таблицы функций
 def set_func_table(tab):
     row_cells = tab.row_cells(0)
     tab.cell(0, 0).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -70,6 +87,31 @@ def set_func_table(tab):
     desc.bold = True
 
 
+# создание шабки таблицы полей
+def set_fields_table(tab):
+    row_cells = tab.row_cells(0)
+    for i in range(3):
+        tab.cell(0, i).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    name = row_cells[0].paragraphs[0].add_run('Имя')
+    type = row_cells[1].paragraphs[0].add_run('Тип')
+    desc = row_cells[2].paragraphs[0].add_run('Назначение')
+    name.bold = True
+    type.bold = True
+    desc.bold = True
+
+
+# создание шабки таблицы методов
+def set_methods_table(tab):
+    row_cells = tab.row_cells(0)
+    tab.cell(0, 0).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    tab.cell(0, 1).paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+    func = row_cells[0].paragraphs[0].add_run('Метод')
+    desc = row_cells[1].paragraphs[0].add_run('Назначение')
+    func.bold = True
+    desc.bold = True
+
+
+# поиск и сохранение всех функций в исходнике
 def get_funcs_from_cpp(path):
     funcs_list = []
     with open(path) as src:
@@ -88,19 +130,65 @@ def get_funcs_from_cpp(path):
     return funcs_list
 
 
-def fill_table(tab, funcs):
+# поиск и сохранение всех классов в исходнике
+def get_classes_from_cpp(path):
+    classes_list = []
+    with open(path) as src:
+        for line in src:
+            if 'class' in line:
+                class_name = line.split(' ')[1]
+                class_obj = class_(class_name, [], [])
+                while '};' not in line:
+                    if '//f' in line:
+                        line = line.strip().split(' ')
+                        f_type = line[0]
+                        f_name = line[1].replace(';', '')
+                        f_desc = ' '.join([line[i] for i in range(4, len(line))])
+                        field = {'field_name': f_name, 'data_type': f_type, 'description': f_desc}
+                        class_obj.fields.append(field.copy())
+                    if '/*m' in line:
+                        line = line.strip().replace('/*m ', '').replace('*/', '')
+                        m_desc = line
+                        m_func = next(src).strip()
+                        method = {'func': m_func, 'description': m_desc}
+                        class_obj.methods.append(method.copy())
+                    line = next(src)
+                classes_list.append(class_obj)
+    return classes_list
+
+
+# заполнение таблицы функций
+def fill_funcs_table(tab, funcs):
     for i in range(len(funcs)):
         new_row = tab.add_row()
         new_row.cells[0].paragraphs[0].text = funcs[i][0]
         new_row.cells[1].paragraphs[0].text = funcs[i][1]
 
 
+# заполнение таблицы полей
+def fill_fields_table(tab, fields):
+    for i in range(len(fields)):
+        new_row = tab.add_row()
+        new_row.cells[0].paragraphs[0].text = fields[i]['field_name']
+        new_row.cells[1].paragraphs[0].text = fields[i]['data_type']
+        new_row.cells[2].paragraphs[0].text = fields[i]['description']
+
+
+# заполнение таблицы методов
+def fill_methods_table(tab, methods):
+    for i in range(len(methods)):
+        new_row = tab.add_row()
+        new_row.cells[0].paragraphs[0].text = methods[i]['func']
+        new_row.cells[1].paragraphs[0].text = methods[i]['description']
+
+
+# установка стиля для таблицы
 def set_table_style(tab):
-    tab.allow_autofit = False
+    # tab.allow_autofit = False
     for row in tab.rows:
         for cell in row.cells:
             paragraphs = cell.paragraphs
-            cell.width = Cm(8.74)
+            # cell.width = Cm(8.74)
             for paragraph in paragraphs:
                 paragraph.paragraph_format.line_spacing = 1.5
                 for run in paragraph.runs:
@@ -109,6 +197,7 @@ def set_table_style(tab):
                     font.size = Pt(12)
 
 
+# установка нужного стиля для абзаца
 def set_p_style(p, font_size, is_bold):
     p.paragraph_format.line_spacing = 1.5
     p.paragraph_format.space_after = 0
@@ -119,6 +208,7 @@ def set_p_style(p, font_size, is_bold):
         font.size = Pt(font_size)
 
 
+# создание ini файла
 def create_config(path):
     config = configparser.ConfigParser()
     config.add_section("Параметры")
@@ -132,6 +222,7 @@ def create_config(path):
         config.write(config_file)
 
 
+# чтение параметров из ini файла
 def read_config(path):
     config = configparser.ConfigParser()
     config.read(path)
@@ -164,7 +255,8 @@ cpp_path = cfg[4]
 output_filename = cpp_path.split(".")[0] + '.docx'
 
 funcs = get_funcs_from_cpp(cpp_path)
-
+get_classes_from_cpp(cpp_path)
+classes = get_classes_from_cpp(cpp_path)
 document = Document()
 document._body.clear_content()
 
@@ -223,14 +315,37 @@ if lab_number != '' and var != '':
         purpose_r2.font.name = 'Times New Roman'
         purpose_r2.font.size = Pt(12)
 
-func_label = document.add_paragraph('Таблица X.X - Функции, обеспечивающие работу программы')
-set_p_style(func_label, font_size=12, is_bold=False)
+    document.add_paragraph()
 
-func_tab = document.add_table(1, 2, 'TableGrid')
-set_func_table(func_tab)
-fill_table(func_tab, funcs)
-set_table_style(func_tab)
+if len(funcs) > 0:
+    func_label = document.add_paragraph('Таблица X.X - Функции, обеспечивающие работу программы')
+    set_p_style(func_label, font_size=12, is_bold=False)
 
-# tab2_label = document.add_paragraph('Таблица X.X - Важнейшие переменные программы')
+    func_tab = document.add_table(1, 2, 'TableGrid')
+    set_func_table(func_tab)
+    fill_funcs_table(func_tab, funcs)
+    set_table_style(func_tab)
+    document.add_paragraph()
+
+if len(classes) > 0:
+    for i in range(len(classes)):
+        class_label = 'Таблица X.X - Описание класса {class_name}'.format(class_name=classes[i].get_all()['class_name'])
+        class_label = document.add_paragraph(class_label)
+        set_p_style(class_label, 12, False)
+        fields_table = document.add_table(1, 3, 'TableGrid')
+        set_fields_table(fields_table)
+        fields = classes[i].get_all()['fields']
+        methods = classes[i].get_all()['methods']
+        fill_fields_table(fields_table, fields)
+
+        method_table = document.add_table(1, 2, 'TableGrid')
+        set_methods_table(method_table)
+        fill_methods_table(method_table, methods)
+
+        set_table_style(fields_table)
+        set_table_style(method_table)
+
+        document.add_paragraph()
+
 
 document.save(output_filename)
